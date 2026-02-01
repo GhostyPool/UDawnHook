@@ -17,6 +17,8 @@ A menu tool for Until Dawn Remake.
 
 ## Installation
 
+**UDawnHook supports only the latest Steam version of the game. Support won't be provided if you are on an older version of the game.**
+
 Drag and drop extracted files into the **Until Dawn\Windows\Bates\Binaries\Win64** folder.
 
 You can find your game's directory in Steam by right-clicking the game->Manage->Browse local files.
