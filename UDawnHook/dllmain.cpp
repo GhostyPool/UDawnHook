@@ -47,8 +47,8 @@ extern "C" __declspec(dllexport) void InitializeASI()
     MH_CreateHook((void*)_pattern(PATID_GetCharacterByCharacterVariant), &Hooks::Characters::GetCharacterByCharacterVariant_Hook, (void**)&Hooks::Characters::oGetCharacterByCharacterVariant);
     MH_EnableHook((void*)_pattern(PATID_GetCharacterByCharacterVariant));
 
-    MH_CreateHook((void*)_pattern(PATID_GetCharacterSoftClassByCharacterAndVariant), &Hooks::Characters::GetCharacterSoftClassByCharacterAndVariant_Hook, (void**)&Hooks::Characters::oGetCharacterSoftClassByCharacterAndVariant);
-    MH_EnableHook((void*)_pattern(PATID_GetCharacterSoftClassByCharacterAndVariant));
+    ReadCall(_pattern(PATID_GetCharacterSoftClassByCharacterAndVariant_StreamingManager), Hooks::Characters::oGetCharacterSoftClassByCharacterAndVariant);
+    InjectHook(_pattern(PATID_GetCharacterSoftClassByCharacterAndVariant_StreamingManager), tramp->Jump(Hooks::Characters::GetCharacterSoftClassByCharacterAndVariant_Hook));
 
     //So default reset mode doesnt reset save game
     Patch<int>(_pattern(PATID_DebugResetMode), 0);

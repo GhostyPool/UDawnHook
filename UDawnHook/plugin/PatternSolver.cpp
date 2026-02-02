@@ -45,7 +45,7 @@ void PatternSolver::Initialize()
     ms_patterns[PATID_MenuActor_Activate] = GetPattern("4C 8B DC 41 56 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4 48 89 84 24 ? ? ? ? ? ? ? 4C 8B F1 49 89 5B", 0);
 
     ms_patterns[PATID_GetCharacterByCharacterVariant] = GetPattern("48 8B C4 56 48 83 EC ? 48 89 58 ? 4D 8B C8", 0);
-    ms_patterns[PATID_GetCharacterSoftClassByCharacterAndVariant] = GetPattern("48 89 5C 24 ? 48 89 6C 24 ? 56 57 41 56 48 83 EC ? ? ? ? 48 8B F1 8B CB 4D 8B F1", 0);
+    ms_patterns[PATID_GetCharacterSoftClassByCharacterAndVariant_StreamingManager] = GetPattern("E8 ? ? ? ? 48 8B 8D ? ? ? ? 48 85 C9 74 ? E8 ? ? ? ? 48 8D 8D ? ? ? ? E8 ? ? ? ? 48 8B D8 48 85 C0", 0);
 
     ms_patterns[PATID_DebugResetMode] = GetPattern("C7 83 ? ? ? ? ? ? ? ? C7 83 ? ? ? ? ? ? ? ? 48 89 BB ? ? ? ? 48 89 BB ? ? ? ? 89 BB ? ? ? ? C7 83", 6);
     ms_patterns[PATID_UWidget_SetVisibility] = GetPattern("E9 ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 48 8B C4 48 89 58 ? 57 48 83 EC ? 48 89 70", 0);
@@ -112,7 +112,7 @@ const char* PatternSolver::GetPatternName(int id)
         "UWorld_GetWorldSettings",
         "MenuActor_Activate",
         "GetCharacterByCharacterVariant",
-        "GetCharacterSoftClassByCharacterAndVariant",
+        "GetCharacterSoftClassByCharacterAndVariant_StreamingManager",
         "DebugResetMode",
         "UWidget_SetVisibility",
         "DoUpdateCamera",

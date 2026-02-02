@@ -21,7 +21,7 @@ enum EPatternID {
 	PATID_MenuActor_Activate,
 
 	PATID_GetCharacterByCharacterVariant,
-	PATID_GetCharacterSoftClassByCharacterAndVariant,
+	PATID_GetCharacterSoftClassByCharacterAndVariant_StreamingManager,
 
 	PATID_DebugResetMode,
 	PATID_UWidget_SetVisibility,
