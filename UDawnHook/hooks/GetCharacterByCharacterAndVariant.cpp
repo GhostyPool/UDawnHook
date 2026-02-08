@@ -43,7 +43,7 @@ int64 Hooks::Characters::GetCharacterSoftClassByCharacterAndVariant_Hook(int64 a
 				{
 					if (strcmp(rule.originalCharacter.characterName.c_str(), name) == 0 && strcmp(rule.originalCharacter.variantName.c_str(), variant) == 0)
 					{
-						//eLog::Message(__FUNCTION__, "Swap rule matched, overriding with character: %s and variant: %s", rule.swapCharacter.characterName.c_str(), rule.swapCharacter.variantName.c_str());
+						DEBUG_LOG(__FUNCTION__, "Swap rule matched, overriding with character: %s and variant: %s", rule.swapCharacter.characterName.c_str(), rule.swapCharacter.variantName.c_str());
 
 						newName = FName(rule.swapCharacter.characterName.c_str(), FNAME_Add);
 						newVariant = FString(rule.swapCharacter.variantName.c_str());
@@ -77,7 +77,7 @@ int64 Hooks::Characters::GetCharacterSoftClassByCharacterAndVariant_Hook(int64 a
 				{
 					const CharacterInfo& swapChr = characterInfo[*chrOverride.characterOverride];
 
-					//eLog::Message(__FUNCTION__, "Overriding with character: %s and variant: %s", swapChr.characterName, swapChr.variants[*chrOverride.variantOverride]);
+					DEBUG_LOG(__FUNCTION__, "Overriding with character: %s and variant: %s", swapChr.characterName, swapChr.variants[*chrOverride.variantOverride]);
 
 					newName = FName(swapChr.characterName, FNAME_Add);
 					newVariant = FString(swapChr.variants[*chrOverride.variantOverride]);
@@ -143,7 +143,7 @@ int64 Hooks::Characters::GetCharacterByCharacterVariant_Hook(int64 a1, int64 a2,
 			{
 				if (strcmp(rule.originalCharacter.characterName.c_str(), name) == 0 && strcmp(rule.originalCharacter.variantName.c_str(), variant) == 0)
 				{
-					//eLog::Message(__FUNCTION__, "Swap rule matched, overriding with character: %s and variant: %s", rule.swapCharacter.characterName.c_str(), rule.swapCharacter.variantName.c_str());
+					DEBUG_LOG(__FUNCTION__, "Swap rule matched, overriding with character: %s and variant: %s", rule.swapCharacter.characterName.c_str(), rule.swapCharacter.variantName.c_str());
 
 					newName = FName(rule.swapCharacter.characterName.c_str(), FNAME_Add);
 					newVariant = FString(rule.swapCharacter.variantName.c_str());
@@ -179,7 +179,7 @@ int64 Hooks::Characters::GetCharacterByCharacterVariant_Hook(int64 a1, int64 a2,
 			{
 				const CharacterInfo& swapChr = characterInfo[*chrOverride.characterOverride];
 
-				//eLog::Message(__FUNCTION__, "Overriding with character: %s and variant: %s", swapChr.characterName, swapChr.variants[*chrOverride.variantOverride]);
+				DEBUG_LOG(__FUNCTION__, "Overriding with character: %s and variant: %s", swapChr.characterName, swapChr.variants[*chrOverride.variantOverride]);
 
 				newName = FName(swapChr.characterName, FNAME_Add);
 				newVariant = FString(swapChr.variants[*chrOverride.variantOverride]);

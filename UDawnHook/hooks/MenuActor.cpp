@@ -75,6 +75,8 @@ void Hooks::MenuActor::Activate_Hook(int64 a1, int64 CharacterName, int64 Varian
 						break;
 					}
 				}
+
+				DEBUG_LOG(__FUNCTION__, "Final menu character: %ws, variant: %ws, emotion: %s", newName, newVariant, SettingsMgr->menuCharacter.szMenuEmotion);
 			}
 			else
 				eLog::Message(__FUNCTION__, "ERROR: Invalid menu character or variant name provided!");

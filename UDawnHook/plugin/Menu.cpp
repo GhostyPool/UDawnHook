@@ -747,7 +747,7 @@ void Menu::DrawSettings()
 		ImGui::InputFloat("##", &SettingsMgr->fMenuScale);
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			eLog::Message(__FUNCTION__, "Font reload requested!");
+			DEBUG_LOG(__FUNCTION__, "Font reload requested!");
 			GUIImplementation::RequestFontReload();
 		}
 		ImGui::PopItemWidth();

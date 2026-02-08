@@ -294,9 +294,6 @@
     <ClInclude Include="unreal\APlayerCameraManager.h">
       <Filter>unreal</Filter>
     </ClInclude>
-    <ClInclude Include="gui\MinHook_Status.h">
-      <Filter>gui</Filter>
-    </ClInclude>
     <ClInclude Include="unreal\ABatesCharacter.h">
       <Filter>unreal</Filter>
     </ClInclude>

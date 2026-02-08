@@ -10,42 +10,23 @@
 #include "../helper/eKeyboardMan.h"
 #include "dx12hook.h"
 
-bool GUIImplementation::ms_bInit;
-bool GUIImplementation::ms_bFailed;
-bool GUIImplementation::ms_bShouldReloadFonts;
-int  GUIImplementation::ms_iWaitingFrames;
-bool GUIImplementation::ms_bShouldRefreshRenderTarget;
-HWND GUIImplementation::ms_hWindow;
-ID3D11RenderTargetView* GUIImplementation::ms_pRenderTarget;
-WNDPROC	GUIImplementation::ms_pWndProc;
-GUIImplementationMode		GUIImplementation::ms_mode;
+bool GUIImplementation::ms_bInit = false;
+bool GUIImplementation::ms_bFailed = false;
+bool GUIImplementation::ms_bShouldReloadFonts = false;
+int  GUIImplementation::ms_iWaitingFrames = 0;
+bool GUIImplementation::ms_bShouldRefreshSwapChainData = false;
+HWND GUIImplementation::ms_hWindow = 0;
+ID3D11RenderTargetView* GUIImplementation::ms_pRenderTarget = nullptr;
+WNDPROC	GUIImplementation::ms_pWndProc = 0;
 ID3D12DescriptorHeap* GUIImplementation::g_pd3dRtvDescHeap = nullptr;
 ID3D12DescriptorHeap* GUIImplementation::g_pd3dSrvDescHeap = nullptr;
 ID3D12CommandQueue* GUIImplementation::g_pd3dCommandQueue = nullptr;
 ID3D12GraphicsCommandList* GUIImplementation::g_pd3dCommandList = nullptr;
+ID3D12Fence* GUIImplementation::g_pFence = nullptr;
+HANDLE GUIImplementation::g_hFenceEvent = nullptr;
 std::vector<GUIImplementation::GFrameContext> GUIImplementation::frameContextData;
-ID3D11DeviceContext* GUIImplementation::ms_cachedContext;
-int GUIImplementation::numBuffers;
-DXGI_FORMAT GUIImplementation::format;
-
-void GUIImplementation::Init(GUIImplementationMode mode)
-{
-	eLog::Message(__FUNCTION__, "INFO: Init");
-	ms_bInit = false;
-	ms_bFailed = false;
-	ms_hWindow = 0;
-	ms_pRenderTarget = nullptr;
-	ms_bShouldReloadFonts = false;
-	ms_iWaitingFrames = 0;
-	ms_bShouldRefreshRenderTarget = false;
-	ms_pWndProc = 0;
-	ms_cachedContext = nullptr;
-	ms_mode = mode;
-	numBuffers = 0;
-	format = DXGI_FORMAT_UNKNOWN;
-	frameContextData.clear();
-}
-
+int GUIImplementation::numBuffers = 0;
+DXGI_FORMAT GUIImplementation::format = DXGI_FORMAT_UNKNOWN;
 
 bool GUIImplementation::ImGui_InitDX12(IDXGISwapChain* pSwapChain, HWND hWindow)
 {
@@ -65,7 +46,6 @@ bool GUIImplementation::ImGui_InitDX12(IDXGISwapChain* pSwapChain, HWND hWindow)
 		return false;
 	}
 
-
 	ID3D12Device* pDevice = nullptr;
 
 	HRESULT hResult = pSwapChain->GetDevice(__uuidof(ID3D12Device), (void**)&pDevice);
@@ -76,82 +56,12 @@ bool GUIImplementation::ImGui_InitDX12(IDXGISwapChain* pSwapChain, HWND hWindow)
 		return false;
 	}
 
-	{
-		DXGI_SWAP_CHAIN_DESC desc;
-		ZeroMemory(&desc, sizeof(DXGI_SWAP_CHAIN_DESC));
-		pSwapChain->GetDesc(&desc);
-		numBuffers = desc.BufferCount;
-		format = desc.BufferDesc.Format;
-		frameContextData.clear();
-		frameContextData.resize(numBuffers);
-	}
-
-
-	{
-		D3D12_DESCRIPTOR_HEAP_DESC desc;
-		ZeroMemory(&desc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
-		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		desc.NumDescriptors = numBuffers;
-		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		HRESULT hResult = pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dSrvDescHeap));
-
-		if (FAILED(hResult))
-		{
-			ms_bFailed = true;
-			eLog::Message(__FUNCTION__, "ERROR: Failed to create g_pd3dSrvDescHeap! Error code: 0x%X", hResult);
-			return false;
-		}
-	}
-
-	{
-		D3D12_DESCRIPTOR_HEAP_DESC desc;
-		ZeroMemory(&desc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
-		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-		desc.NumDescriptors = numBuffers;
-		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-		desc.NodeMask = 1;
-
-
-		HRESULT hResult = pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dRtvDescHeap));
-
-		if (FAILED(hResult))
-		{
-			ms_bFailed = true;
-			eLog::Message(__FUNCTION__, "ERROR: Failed to create g_pd3dRtvDescHeap! Error code: 0x%X", hResult);
-			return false;
-		}
-	}
-
-	ID3D12CommandAllocator* allocator = nullptr;
-
-	hResult = pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator));
-
-	for (UINT i = 0; i < numBuffers; i++)
-		frameContextData[i].g_commandAllocator = allocator;
-
-	if (pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator, nullptr, IID_PPV_ARGS(&g_pd3dCommandList)) != S_OK ||
-		g_pd3dCommandList->Close() != S_OK)
+	if (!ImGui_CreateSwapChainResources(pDevice, pSwapChain))
 	{
 		ms_bFailed = true;
-		eLog::Message(__FUNCTION__, "ERROR: Failed to create command list! Error code: 0x%X", hResult);
 		return false;
 	}
-
-	{
-		SIZE_T rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = g_pd3dRtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-
-		for (UINT i = 0; i < numBuffers; i++)
-		{
-			ID3D12Resource* pBuffer = nullptr;
-			pSwapChain->GetBuffer(i, IID_PPV_ARGS(&pBuffer));
-			pDevice->CreateRenderTargetView(pBuffer, nullptr, rtvHandle);
-			frameContextData[i].g_mainRenderTargetResource = pBuffer;
-			frameContextData[i].g_mainRenderTargetDescriptor = rtvHandle;
-			rtvHandle.ptr += rtvDescriptorSize;
-		}
-	}
-
+	ms_bShouldRefreshSwapChainData = false;
 
 	if (!ImGui_ImplDX12_Init(pDevice, numBuffers,
 		format, g_pd3dSrvDescHeap, g_pd3dSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
@@ -169,61 +79,246 @@ bool GUIImplementation::ImGui_InitDX12(IDXGISwapChain* pSwapChain, HWND hWindow)
 		return false;
 	}
 
+	// fence
+	{
+		HRESULT hr = pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&g_pFence));
+		if (FAILED(hr))
+		{
+			eLog::Message(__FUNCTION__, "ERROR: Failed to create fence! Error code: 0x%X", hr);
+			return false;
+		}
+
+		g_hFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		if (!g_hFenceEvent)
+		{
+			eLog::Message(__FUNCTION__, "ERROR: Failed to create fence event!");
+			return false;
+		}
+	}
+
+	pDevice->Release();
+
 	ImGui_SetStyle();
-	eLog::Message(__FUNCTION__, "INFO: Init OK");
+	DEBUG_LOG(__FUNCTION__, "INFO: Init OK");
 	return true;
 }
 
-void GUIImplementation::ImGui_SetupRenderTargetsDX12(IDXGISwapChain* pSwapChain)
+bool GUIImplementation::ImGui_CreateSwapChainResources(ID3D12Device* pDevice, IDXGISwapChain* pSwapChain)
 {
-	ID3D12Device* pDevice = nullptr;
+	DEBUG_LOG(__FUNCTION__, "Device: %p", pDevice);
 
-	HRESULT hResult = pSwapChain->GetDevice(__uuidof(ID3D12Device), (void**)&pDevice);
-	if (FAILED(hResult))
-		return;
+	{
+		DXGI_SWAP_CHAIN_DESC desc;
+		ZeroMemory(&desc, sizeof(DXGI_SWAP_CHAIN_DESC));
+		pSwapChain->GetDesc(&desc);
+		numBuffers = desc.BufferCount;
+		format = desc.BufferDesc.Format;
 
+		DEBUG_LOG(__FUNCTION__, "Num buffers: %d", numBuffers);
+
+		frameContextData.clear();
+		frameContextData.resize(numBuffers);
+	}
+
+	// SRV
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc;
+		ZeroMemory(&desc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		desc.NumDescriptors = numBuffers + 1;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		HRESULT hResult = pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dSrvDescHeap));
+
+		if (FAILED(hResult))
+		{
+			eLog::Message(__FUNCTION__, "ERROR: Failed to create g_pd3dSrvDescHeap! Error code: 0x%X", hResult);
+			return false;
+		}
+		DEBUG_LOG(__FUNCTION__, "g_pd3dSrvDescHeap: %p", g_pd3dSrvDescHeap);
+	}
+
+	// descriptor heap
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc;
+		ZeroMemory(&desc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+		desc.NumDescriptors = numBuffers;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+		desc.NodeMask = 1;
+
+
+		HRESULT hResult = pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dRtvDescHeap));
+		if (FAILED(hResult))
+		{
+			eLog::Message(__FUNCTION__, "ERROR: Failed to create g_pd3dRtvDescHeap! Error code: 0x%X", hResult);
+			return false;
+		}
+		DEBUG_LOG(__FUNCTION__, "g_pd3dRtvDescHeap: %p", g_pd3dRtvDescHeap);
+	}
+
+	// command allocator
 	for (UINT i = 0; i < numBuffers; ++i)
 	{
-		ID3D12Resource* pBackBuffer = NULL;
-		pSwapChain->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
-		if (pBackBuffer)
+		HRESULT hr = pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&frameContextData[i].commandAllocator));
+		if (FAILED(hr))
 		{
-			DXGI_SWAP_CHAIN_DESC sd;
-			ZeroMemory(&sd, sizeof(DXGI_SWAP_CHAIN_DESC));
-			pSwapChain->GetDesc(&sd);
-
-			D3D12_RENDER_TARGET_VIEW_DESC desc;
-			ZeroMemory(&desc, sizeof(D3D12_RENDER_TARGET_VIEW_DESC));
-			desc.Format = sd.BufferDesc.Format;
-			desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-
-			pDevice->CreateRenderTargetView(pBackBuffer, &desc, frameContextData[i].g_mainRenderTargetDescriptor);
-			frameContextData[i].g_mainRenderTargetResource = pBackBuffer;
+			eLog::Message(__FUNCTION__, "ERROR: Failed to create command allocator! Error code: 0x%X", hr);
+			return false;
 		}
+	}
+
+	// command list
+	HRESULT hResult = pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, frameContextData[0].commandAllocator, nullptr, IID_PPV_ARGS(&g_pd3dCommandList));
+	if (hResult != S_OK || g_pd3dCommandList->Close() != S_OK)
+	{
+		eLog::Message(__FUNCTION__, "ERROR: Failed to create command list! Error code: 0x%X", hResult);
+		return false;
+	}
+
+
+	// render targets
+	{
+		SIZE_T rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = g_pd3dRtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+
+		for (UINT i = 0; i < numBuffers; ++i)
+		{
+			ID3D12Resource* pBackBuffer = nullptr;
+			HRESULT hr = pSwapChain->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
+			if (FAILED(hr))
+			{
+				eLog::Message(__FUNCTION__, "ERROR: Failed to get buffer! Error code: 0x%X", hr);
+				return false;
+			}
+
+			pDevice->CreateRenderTargetView(pBackBuffer, nullptr, rtvHandle);
+			pBackBuffer->Release();
+			frameContextData[i].mainRenderTargetDescriptor = rtvHandle;
+			rtvHandle.ptr += rtvDescriptorSize;
+		}
+	}
+
+	return true;
+}
+
+bool GUIImplementation::ImGui_RecreateAfterResize(ID3D12Device* pDevice, IDXGISwapChain* pSwapChain)
+{
+	DEBUG_LOG(__FUNCTION__, "Device: %p", pDevice);
+
+	bool bNumBuffersChanged = false;
+	{
+		DXGI_SWAP_CHAIN_DESC desc;
+		ZeroMemory(&desc, sizeof(DXGI_SWAP_CHAIN_DESC));
+		pSwapChain->GetDesc(&desc);
+
+		if (numBuffers != desc.BufferCount)
+			bNumBuffersChanged = true;
+
+		numBuffers = desc.BufferCount;
+		format = desc.BufferDesc.Format;
+
+		DEBUG_LOG(__FUNCTION__, "Num buffers: %d", numBuffers);
+	}
+
+	if (bNumBuffersChanged) // recreate SRV if numBuffers changed
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc;
+		ZeroMemory(&desc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		desc.NumDescriptors = numBuffers + 1;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		HRESULT hResult = pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dSrvDescHeap));
+
+		if (FAILED(hResult))
+		{
+			eLog::Message(__FUNCTION__, "ERROR: Failed to create g_pd3dSrvDescHeap! Error code: 0x%X", hResult);
+			return false;
+		}
+		DEBUG_LOG(__FUNCTION__, "g_pd3dSrvDescHeap: %p", g_pd3dSrvDescHeap);
+	}
+
+	// descriptor heap
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc;
+		ZeroMemory(&desc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+		desc.NumDescriptors = numBuffers;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+		desc.NodeMask = 1;
+
+
+		HRESULT hResult = pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dRtvDescHeap));
+		if (FAILED(hResult))
+		{
+			eLog::Message(__FUNCTION__, "ERROR: Failed to create g_pd3dRtvDescHeap! Error code: 0x%X", hResult);
+			return false;
+		}
+		DEBUG_LOG(__FUNCTION__, "g_pd3dRtvDescHeap: %p", g_pd3dRtvDescHeap);
+	}
+
+	// render targets
+	{
+		SIZE_T rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = g_pd3dRtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+
+		for (UINT i = 0; i < numBuffers; ++i)
+		{
+			ID3D12Resource* pBackBuffer = nullptr;
+			HRESULT hr = pSwapChain->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
+			if (FAILED(hr))
+			{
+				eLog::Message(__FUNCTION__, "ERROR: Failed to get buffer! Error code: 0x%X", hr);
+				return false;
+			}
+
+			pDevice->CreateRenderTargetView(pBackBuffer, nullptr, rtvHandle);
+			pBackBuffer->Release();
+			frameContextData[i].mainRenderTargetDescriptor = rtvHandle;
+			rtvHandle.ptr += rtvDescriptorSize;
+		}
+	}
+
+	// reinit ImGui if SRV changed
+	if (bNumBuffersChanged)
+	{
+		ImGui_ImplDX12_Shutdown();
+
+		if (!ImGui_ImplDX12_Init(pDevice, numBuffers,
+			format, g_pd3dSrvDescHeap, g_pd3dSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
+			g_pd3dSrvDescHeap->GetGPUDescriptorHandleForHeapStart()))
+		{
+			eLog::Message(__FUNCTION__, "Failed to init DX12 Backend!");
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void GUIImplementation::ImGui_DeleleteSwapChainResources()
+{
+	if (g_pd3dRtvDescHeap)
+	{
+		g_pd3dRtvDescHeap->Release();
+		g_pd3dRtvDescHeap = nullptr;
 	}
 }
 
-void GUIImplementation::ImGui_DeleteRenderTargetsDX12(IDXGISwapChain* pSwapChain)
+void GUIImplementation::WaitForFrames()
 {
-	ID3D12Device* pDevice = nullptr;
-
-	HRESULT hResult = pSwapChain->GetDevice(__uuidof(ID3D12Device), (void**)&pDevice);
-	if (FAILED(hResult))
-		return;
-
-	for (UINT i = 0; i < numBuffers; ++i)
+	for (auto& frame : frameContextData)
 	{
-		if (frameContextData[i].g_mainRenderTargetResource)
+		if (frame.fenceValue != 0 && g_pFence->GetCompletedValue() < frame.fenceValue)
 		{
-			frameContextData[i].g_mainRenderTargetResource->Release();
-			frameContextData[i].g_mainRenderTargetResource = nullptr;
+			HRESULT hr = g_pFence->SetEventOnCompletion(frame.fenceValue, g_hFenceEvent);
+			if (FAILED(hr))
+			{
+				eLog::Message(__FUNCTION__, "ERROR: Failed to set event on completion! Error code: 0x%X", hr);
+				return;
+			}
+			WaitForSingleObject(g_hFenceEvent, INFINITE);
 		}
 	}
-}
-
-void GUIImplementation::ImGui_Reload(IDXGISwapChain* pSwapChain)
-{
-	ms_bShouldRefreshRenderTarget = true;
 }
 
 void GUIImplementation::ImGui_SetStyle()
@@ -271,13 +366,40 @@ void GUIImplementation::ImGui_ReloadFont()
 	ImGui_ImplDX12_InvalidateDeviceObjects();
 }
 
-void GUIImplementation::OnPresent(IDXGISwapChain3* pSwapChain)
+void GUIImplementation::OnPresent(IDXGISwapChain3* pSwapChain, bool bShouldResetFenceValues)
 {
 	if (ms_bFailed)
 		return;
 
 	if (!ms_bInit)
 		OnPresent_GUIStart(pSwapChain);
+
+	if (!ms_bInit)
+		return;
+
+	if (bShouldResetFenceValues)
+	{
+		WaitForFrames();
+		for (auto& frame : frameContextData)
+			frame.fenceValue = 0;
+	}
+
+	if (ms_bShouldRefreshSwapChainData)
+	{
+		ID3D12Device* pDevice = nullptr;
+		HRESULT hr = pSwapChain->GetDevice(IID_PPV_ARGS(&pDevice));
+		if (FAILED(hr))
+		{
+			eLog::Message(__FUNCTION__, "ERROR: Failed to obtain D3D12 device! Error code: 0x%X", hr);
+			return;
+		}
+		
+		if (!ImGui_RecreateAfterResize(pDevice, pSwapChain))
+			return;
+
+		pDevice->Release();
+		ms_bShouldRefreshSwapChainData = false;
+	}
 
 	ImGui_ProcessDX12(pSwapChain);
 }
@@ -312,14 +434,8 @@ void GUIImplementation::OnPresent_GUIStart(IDXGISwapChain* pSwapChain)
 	{
 		ms_bInit = true;
 		ms_bFailed = false;
-		eLog::Message(__FUNCTION__, "INFO: Init OK");
+		DEBUG_LOG(__FUNCTION__, "INFO: Init OK");
 	}
-	ms_bShouldRefreshRenderTarget = true;
-}
-
-void GUIImplementation::ImGui_Process(ID3D11DeviceContext* pContext)
-{
-
 }
 
 void GUIImplementation::ImGui_ProcessDX12(IDXGISwapChain3* pSwapChain)
@@ -327,10 +443,24 @@ void GUIImplementation::ImGui_ProcessDX12(IDXGISwapChain3* pSwapChain)
 	if (!ms_bInit)
 		return;
 
-	g_pd3dCommandQueue = DX12Hook::Get()->GetCommandQueue();
+	DX12Hook* dx12hook = DX12Hook::Get();
 
+	g_pd3dCommandQueue = dx12hook->GetCommandQueue(pSwapChain);
 	if (!g_pd3dCommandQueue)
+	{
+		eLog::Message(__FUNCTION__, "ERROR: Failed to get command queue!");
 		return;
+	}
+	if (!g_pd3dCommandList)
+	{
+		eLog::Message(__FUNCTION__, "ERROR: Failed to get command list!");
+		return;
+	}
+	if (!g_pd3dSrvDescHeap)
+	{
+		eLog::Message(__FUNCTION__, "ERROR: Failed to get SRV!");
+		return;
+	}
 
 	if (ms_bShouldReloadFonts)
 	{
@@ -346,13 +476,6 @@ void GUIImplementation::ImGui_ProcessDX12(IDXGISwapChain3* pSwapChain)
 		}
 	}
 
-	if (ms_bShouldRefreshRenderTarget)
-	{
-		ImGui_DeleteRenderTargetsDX12(pSwapChain);
-		ImGui_SetupRenderTargetsDX12(pSwapChain);
-		ms_bShouldRefreshRenderTarget = false;
-	}
-
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
@@ -362,25 +485,53 @@ void GUIImplementation::ImGui_ProcessDX12(IDXGISwapChain3* pSwapChain)
 	ImGui::EndFrame();
 
 	UINT backBufferIdx = pSwapChain->GetCurrentBackBufferIndex();
-	GFrameContext& frameContext = frameContextData[backBufferIdx];
+	if (backBufferIdx >= frameContextData.size())
+	{
+		eLog::Message(__FUNCTION__, "ERROR: BackBufferIndex is higher or equal to the size of frame contex data vector!");
+		return;
+	}
 
+	GFrameContext& frameContext = frameContextData[backBufferIdx];
+	if (!frameContext.mainRenderTargetDescriptor.ptr)
+	{
+		eLog::Message(__FUNCTION__, "ERROR: Failed to get frame descriptor!");
+		return;
+	}
 
 	ID3D12CommandAllocator* commandAllocator = nullptr;
-	commandAllocator = frameContextData[backBufferIdx].g_commandAllocator;
+	commandAllocator = frameContextData[backBufferIdx].commandAllocator;
+	if (!commandAllocator)
+	{
+		eLog::Message(__FUNCTION__, "ERROR: Failed to get command allocator!");
+		return;
+	}
+
+
+	WaitForFrames();
+
 	commandAllocator->Reset();
 
 
 	D3D12_RESOURCE_BARRIER barrier = { };
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	barrier.Transition.pResource = frameContext.g_mainRenderTargetResource;
+
+	ID3D12Resource* pBackBuffer = nullptr;
+	HRESULT hr = pSwapChain->GetBuffer(backBufferIdx, IID_PPV_ARGS(&pBackBuffer));
+	if (FAILED(hr))
+	{
+		eLog::Message(__FUNCTION__, "ERROR: Failed to get buffer! Error code: 0x%X", hr);
+		return;
+	}
+
+	barrier.Transition.pResource = pBackBuffer;
 	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
 	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
 	g_pd3dCommandList->Reset(commandAllocator, nullptr);
 	g_pd3dCommandList->ResourceBarrier(1, &barrier);
-	g_pd3dCommandList->OMSetRenderTargets(1, &frameContext.g_mainRenderTargetDescriptor, FALSE, nullptr);
+	g_pd3dCommandList->OMSetRenderTargets(1, &frameContext.mainRenderTargetDescriptor, FALSE, nullptr);
 	g_pd3dCommandList->SetDescriptorHeaps(1, &g_pd3dSrvDescHeap);
 
 	ImGui::Render();
@@ -390,7 +541,15 @@ void GUIImplementation::ImGui_ProcessDX12(IDXGISwapChain3* pSwapChain)
 	g_pd3dCommandList->ResourceBarrier(1, &barrier);
 	g_pd3dCommandList->Close();
 
+	pBackBuffer->Release();
+
 	g_pd3dCommandQueue->ExecuteCommandLists(1, reinterpret_cast<ID3D12CommandList* const*>(&g_pd3dCommandList));
+	
+	UINT64 fenceValue = dx12hook->GetFenceValue(pSwapChain);
+	UINT64 targetValue = ++fenceValue;
+	g_pd3dCommandQueue->Signal(g_pFence, targetValue);
+	frameContext.fenceValue = targetValue;
+	dx12hook->SetFenceValue(pSwapChain, targetValue);
 }
 
 void GUIImplementation::Gamepad_Process()
@@ -405,12 +564,15 @@ void GUIImplementation::Gamepad_Reset()
 
 void GUIImplementation::OnBeforeResize(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
-	ImGui_Reload(pSwapChain);
+	DEBUG_LOG(__FUNCTION__, "Deleting resources!");
+
+	WaitForFrames();
+	ImGui_DeleleteSwapChainResources();
 }
 
 void GUIImplementation::OnAfterResize(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
-
+	ms_bShouldRefreshSwapChainData = true;
 }
 
 

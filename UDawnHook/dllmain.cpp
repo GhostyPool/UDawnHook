@@ -5,7 +5,6 @@
 
 #include "gui/dx12hook.h"
 #include "gui/gui_impl.h"
-#include "gui/MinHook_Status.h"
 
 #include "hooks/hooks.h"
 
