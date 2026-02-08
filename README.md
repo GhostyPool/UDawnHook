@@ -23,11 +23,6 @@ Drag and drop extracted files into the **Until Dawn\Windows\Bates\Binaries\Win64
 
 You can find your game's directory in Steam by right-clicking the game->Manage->Browse local files.
 
-> **Notice**
-> - Run your game in **Borderless** mode, Fullscreen can cause crashes.
-> - Frame generation causes crashes, disable it to avoid issues.
-> - Avoid changing your resolution in-game as that may result in a crash.
-
 ## Usage
 Open the menu by pressing the **Insert** key while in-game.
 This can be configured in **UDawnhook_user.ini** or from the menu's **Settings** tab.
