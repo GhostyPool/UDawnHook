@@ -8,7 +8,7 @@
 #include "../unreal/FRotator.h"
 #include "../unreal/APlayerCameraManager.h"
 
-#define UNTILDAWN_HOOK_VERSION "1.0"
+#define UNTILDAWN_HOOK_VERSION "1.1"
 
 struct SwapRule
 {
